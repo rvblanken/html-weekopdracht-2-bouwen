@@ -1,12 +1,210 @@
+
 <!DOCTYPE html>
 <html lang="nl">
-<head
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Schoolevenement</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        form, table {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        input {
+            display: block;
+            padding: 10px;
+            margin: 10px 0;
+            width: 90%;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+    </style>
 </head>
+
 <body>
+
     <h1>Welkom bij ons schoolevenement!</h1>
-    <p>Deze website geeft je alle informatie die je nodig hebt over ons fantastische evenement.</p>
+    <p>Vul je naam en je geluksgetal in!</p>
+
+    <h2>Jouw gegevens</h2>
+
+    <form id="formulier">
+        <label for="naam">Wat is je naam?</label>
+        <input type="text" id="naam" required>
+
+        <label for="getal">Wat is je geluksgetal?</label>
+        <input type="number" id="getal" required>
+
+        <button type="submit">Opslaan</button>
+    </form>
+
+    <p id="melding" role="status"></p>
+
+    <h2>Geluksgetallen van iedereen</h2>
+
+    <button type="button" onclick="laden()">Vernieuwen</button>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Naam</th>
+                <th>Geluksgetal</th>
+            </tr>
+        </thead>
+        <tbody id="gegevens"></tbody>
+    </table>
+
+    <script>
+        // Vul hier jouw eigen API-gegevens in
+        const API = "https://storage.arhc.informatica.gsf.nl/api";
+        const KEY = "33db3e296835f29a6c64a5364a15ef57ba061c1e5f170f7d";
+
+        // Gegevens opslaan
+        document.getElementById("formulier")
+            .addEventListener("submit", async function(event) {
+                event.preventDefault();
+
+                const naam = document.getElementById("naam").value.trim();
+                const getal = document.getElementById("getal").value;
+                const melding = document.getElementById("melding");
+
+                const persoon = {
+                    naam: naam,
+                    geluksgetal: Number(getal)
+                };
+
+                try {
+                    const antwoord = await fetch(API + "/data", {
+                        method: "POST",
+                        headers: {
+                            "X-API-Key": KEY,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            key: "geluk_" + Date.now() + "_" +
+                                 Math.random().toString(36).slice(2),
+                            value: JSON.stringify(persoon)
+                        })
+                    });
+
+                    if (!antwoord.ok) {
+                        throw new Error("Opslaan mislukt");
+                    }
+
+                    melding.textContent = "Gegevens opgeslagen!";
+                    document.getElementById("formulier").reset();
+
+                    await laden();
+
+                } catch (fout) {
+                    melding.textContent = "Fout: " + fout.message;
+                }
+            });
+
+        // Gegevens ophalen
+        async function laden() {
+            const tabel = document.getElementById("gegevens");
+
+            try {
+                const antwoord = await fetch(API + "/data", {
+                    headers: {
+                        "X-API-Key": KEY
+                    }
+                });
+
+                if (!antwoord.ok) {
+                    throw new Error("Ophalen mislukt");
+                }
+
+                const resultaat = await antwoord.json();
+
+                tabel.innerHTML = "";
+
+                // Ondersteunt lijsten en objecten met key/value
+                const records = Array.isArray(resultaat)
+                    ? resultaat
+                    : Array.isArray(resultaat.data)
+                        ? resultaat.data
+                        : Array.isArray(resultaat.items)
+                            ? resultaat.items
+                            : Object.entries(resultaat.data || resultaat)
+                                .map(([key, value]) => ({ key, value }));
+
+                records.forEach(function(record) {
+                    if (!String(record.key || "").startsWith("geluk_")) {
+                        return;
+                    }
+
+                    let persoon;
+
+                    try {
+                        persoon = typeof record.value === "string"
+                            ? JSON.parse(record.value)
+                            : record.value;
+                    } catch {
+                        return;
+                    }
+
+                    if (!persoon || typeof persoon.naam !== "string") {
+                        return;
+                    }
+
+                    const rij = document.createElement("tr");
+                    const naamCel = document.createElement("td");
+                    const getalCel = document.createElement("td");
+
+                    naamCel.textContent = persoon.naam;
+                    getalCel.textContent = persoon.geluksgetal;
+
+                    rij.appendChild(naamCel);
+                    rij.appendChild(getalCel);
+                    tabel.appendChild(rij);
+                });
+
+            } catch (fout) {
+                document.getElementById("melding").textContent =
+                    "Fout bij ophalen: " + fout.message;
+            }
+        }
+
+        // Bij openen meteen alle gegevens laden
+        laden();
+    </script>
+
 </body>
 </html>
